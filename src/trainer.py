@@ -1,18 +1,18 @@
 import logging
-from statistics import mean
 from typing import Callable, Optional
 
+import numpy as np
 import torch
 from torch import Tensor, nn
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
-from src.model import LSTM
 from src.results import Result
 
 
 class Trainer:
-    def __init__(self, model: LSTM,
+    def __init__(self, model: nn.Module,
                  device: torch.device,
                  *,
                  criterion: nn.Module,
@@ -30,7 +30,7 @@ class Trainer:
         self._optimizer = optimizer
 
         self._eval_metric = eval_metric
-        
+
         self._train_dataloader = train_dataloader
         self._test_dataloader = test_dataloader
 
@@ -46,36 +46,39 @@ class Trainer:
             self._model.train()
             train_losses = []
 
-            for batch in self._train_dataloader:
+            for batch in tqdm(self._train_dataloader, desc='Train'):
+                input_ids = batch['input_ids'].to(self._device)
+                labels = batch['label'].to(self._device)
+
                 self._optimizer.zero_grad()
-                prediction = self._model(batch['input_ids'].to(self._device))
-                loss = self._criterion(prediction, batch['label'].to(self._device))
+                prediction = self._model(input_ids)
+                loss = self._criterion(prediction, labels)
                 loss.backward()
                 self._optimizer.step()
 
                 train_losses.append(loss.item())
 
-                if self._test_dataloader:
-                    eval_result, _ = self.eval()
-                    if self._best_score < eval_result.metric:
-                        self._best_score = eval_result.metric
-                        self._best_model = self._model
+            if self._test_dataloader:
+                eval_result, _ = self.eval()
+                if self._best_score < eval_result.metric:
+                    self._best_score = eval_result.metric
+                    self._best_model = self._model
 
             if self._verbose:
                 logging.warning('Epoch [%i/%i]:\ttrain_loss %.2f\tval_loss %.2f\tscore %.2f',
-                                epoch, self._num_epoch, mean(train_losses), eval_result.loss, eval_result.metric)
+                                epoch, self._num_epoch, np.mean(train_losses), eval_result.loss, eval_result.metric)
         logging.warning('Training complete: best score %.2f', self._best_score)
 
     @property
-    def best_model(self) -> LSTM:
+    def best_model(self) -> nn.Module:
         return self._best_model
-    
+
     @property
     def best_score(self) -> float:
         return self._best_score
 
     @torch.inference_mode()
-    def eval(self) -> tuple[Result, Tensor]:  
+    def eval(self) -> tuple[Result, Tensor]:
         self._model.eval()
 
         predictions = []
@@ -94,9 +97,9 @@ class Trainer:
 
             predictions.append(logits.argmax(dim=1))
     
-        predictions = torch.cat(predictions)
+        pred = torch.cat(predictions)
         if labels:
             targets = torch.cat(labels)
-            metric = self._eval_metric(predictions, targets)
-            return Result(mean(eval_losses), metric), predictions
-        return Result(.0, .0), predictions
+            metric = self._eval_metric(pred, targets)
+            return Result(np.mean(eval_losses), metric), pred
+        return Result(.0, .0), pred
