@@ -15,15 +15,30 @@ class LSTM(nn.Module):
         self.dropout = nn.Dropout(p=0.1)
 
     def forward(self, input_batch) -> torch.Tensor:
-        embeddings = self.embedding(input_batch)
+        output = self.embedding(input_batch)
 
-        output, _ = self.lstm(embeddings)
+        output, _ = self.lstm(output)
         output = output.max(dim=1)[0]
         output = self.activation(output)
-    
+
         output = self.linear_1(output)
         output = self.dropout(output)
         output = self.activation(output)
 
         output = self.linear_2(output)
+        return output
+
+
+class Linear(nn.Module):
+    def __init__(self, hidden_dim: int, vocab_size: int, num_classes: int = 2) -> None:
+        super().__init__()
+        self.embedding = nn.Embedding(vocab_size, hidden_dim)
+        self.linear = nn.Linear(hidden_dim, num_classes)
+        self.activation = nn.ReLU()
+
+    def forward(self, input_batch) -> torch.Tensor:
+        output = self.embedding(input_batch)
+        output = output.max(dim=1)[0]
+        output = self.activation(output)
+        output = self.linear(output)
         return output
