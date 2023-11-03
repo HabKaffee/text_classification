@@ -43,8 +43,8 @@ def remove_symbols(dataset: pd.DataFrame) -> pd.DataFrame:
     return dataset
 
 
-def make_vectorizer(dataset: pd.DataFrame) -> TfidfVectorizer:
-    vectorizer = TfidfVectorizer(max_features=10000)
+def make_vectorizer(dataset: pd.DataFrame, max_features: int) -> TfidfVectorizer:
+    vectorizer = TfidfVectorizer(max_features=max_features)
     vectorizer.fit(dataset[DatasetColumns.DESCRIPTION.value])
     return vectorizer
 
